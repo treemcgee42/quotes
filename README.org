@@ -1,0 +1,11 @@
+
+* Quotes
+
+#+begin_quote
+I should keep a list of quotes I come up with. They could randomly appear during
+use of /Adna/, so that I may contemplate them.
+#+end_quote
+
+This repository houses both the quotes Sqlite3 database and the source code for a
+program to interface with it. That program is written in Common Lisp, and can be
+used to generate an executable with the Makefile: ~make quotes~.
