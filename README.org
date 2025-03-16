@@ -9,3 +9,17 @@ use of /Adna/, so that I may contemplate them.
 This repository houses both the quotes Sqlite3 database and the source code for a
 program to interface with it. That program is written in Common Lisp, and can be
 used to generate an executable with the Makefile: ~make quotes~.
+
+If you want to run this as a script, you'll need to do a few things, like (untested):
+#+begin_src lisp
+  (load "~/.sbclrc")
+  (ql:quickload "clingon" :silent t)
+  (ql:quickload "sqlite" :silent t)
+#+end_src
+at the top and explicitly call ~(main)~ at the bottom.
+
+When starting an interactive REPL session, this may help load this system:
+#+begin_src lisp
+  (push "PATH/TO/REPO/" asdf:*central-registry*)
+#+end_src
+Note the trailing '/' in the path.

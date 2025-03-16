@@ -1,3 +1,4 @@
+;; Copyright (C) 2025 by Varun Malladi
 
 (defpackage :quotes
   (:use :cl)
@@ -6,17 +7,13 @@
 
 (in-package :quotes)
 
-;; If running as script, you might need:
-;; (load "~/.sbclrc")
-;; (ql:quickload "clingon" :silent t)
-;; (ql:quickload "sqlite" :silent t)
-
 ;; --- begin util -------------------------------------------------------------------
 
 (defun current-date-string ()
   "Returns a string for the current date, formatted as YYYY-MM-DD."
   (multiple-value-bind (sec min hour day month year)
       (get-decoded-time)
+    (declare (ignore sec min hour))
     ;; Shamelessly taken from from ChatGPT. WTF is going on here?!
     (format nil "~4,'0D-~2,'0D-~2,'0D" year month day)))
 
@@ -104,6 +101,41 @@ Returns NIL if no match is found."
                (assert (string= (slot-value quote-obj 'quote) quote))
                (assert (string= (slot-value quote-obj 'mood) mood)))))
       (sqlite:disconnect db))))
+
+(defun retrieve-quotes (db sql-query parameters)
+  "Retrieve multiple rows from the database table as a list of `Quote-class'
+objects."
+  (loop
+    with stmt = (sqlite:prepare-statement db sql-query)
+    initially (loop for i from 1
+                    for param in parameters
+                    do (sqlite:bind-parameter stmt i param))
+    while (sqlite:step-statement stmt)
+    collect (make-instance 'Quote-class
+                           :date-added (sqlite:statement-column-value stmt 1)
+                           :quote (sqlite:statement-column-value stmt 2)
+                           :mood (sqlite:statement-column-value stmt 3))
+    finally (sqlite:finalize-statement stmt)))
+
+(defun select-multiple-quotes (db &optional date-range-start date-range-end mood)
+  "Retrieve multiple rows from the database table as a list of `Quote-class' objects,
+subject to value restrictions. Date restrictions are enforced when DATE-RANGE-START
+is set. DATE-RANGE-END may also be set in this case, or the current date is used if
+ommitted (and DATE-RANGE-START is set). Dates are in YYYY-MM-DD format. The date
+range is inclusive. MOOD may also be specified."
+  (when date-range-end (assert date-range-start))
+  (let ((query
+          (concatenate
+           'string
+           "SELECT * FROM quotes WHERE "
+           (if date-range-start
+               (format nil "date_added BETWEEN \"~A\" and \"~A\" "
+                       date-range-start (if date-range-end
+                                            date-range-end
+                                            (current-date-string)))
+               "1=1")
+           (when mood (format nil "AND mood = \"~A\"" mood)))))
+    (retrieve-quotes db query '())))
 
 (defun get-random-quote (db &optional mood)
   (let ((query
@@ -230,19 +262,46 @@ Returns NIL if no match is found."
 ;; ------ end random subcommand -----------------------------------------------------
 ;; ------ begin list subcommand ---------------------------------------------------
 
+(defun cli-list-options ()
+  (list
+   (clingon:make-option
+    :string
+    :long-name "date-start"
+    :description "Specify the starting date range (inclusive)."
+    :required nil
+    :key :date-start)
+   (clingon:make-option
+    :string
+    :long-name "date-end"
+    :description "Specify the starting date range (inclusive)."
+    :required nil
+    :key :date-end)
+   (clingon:make-option
+    :string
+    :long-name "mood"
+    :description "Get a quote with the specified mood."
+    :required nil
+    :key :mood)))
+
 (defun cli-list-handler (cmd)
-  (dump-quotes *db*))
+  (let ((date-start (clingon:getopt cmd :date-start))
+        (date-end (clingon:getopt cmd :date-end))
+        (mood (clingon:getopt cmd :mood)))
+    (let ((quotes (select-multiple-quotes *db* date-start date-end mood)))
+      (dolist (quote quotes)
+        (print-single quote t)))))
 
 (defun cli-list-command ()
   (clingon:make-command
    :name "list"
    :description "List quotes."
-   :options '()
+   :options (cli-list-options)
    :handler #'cli-list-handler))
 
 ;; ------ end list subcommand -----------------------------------------------------
 
-(defun cli-handler (cmd))
+(defun cli-handler (cmd)
+  (declare (ignore cmd)))
 
 (defun cli-command ()
   "A command to say hello to someone"
@@ -256,10 +315,6 @@ Returns NIL if no match is found."
    :sub-commands (list (cli-insert-command)
                        (cli-list-command)
                        (cli-random-command))))
-
-;; TESTING SNIPPETS
-;; (clingon:parse-command-line (cli-command) '("--random"))
-;; (clingon:print-usage (cli-command) t)
 
 (defun main ()
   (setf *db* (sqlite:connect "quotes.db"))
