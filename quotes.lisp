@@ -200,13 +200,19 @@ range is inclusive. MOOD may also be specified."
     :long-name "mood"
     :description "The mood"
     :key :mood
-    :required t)))
+    :required t)
+   (clingon:make-option
+    :string
+    :long-name "date"
+    :description "Date, in YYYY-MM-DD format"
+    :key :date
+    :required nil)))
 
 (defun cli-insert-handler (cmd)
   "Handler for the insert subcommand."
   (let ((quote (clingon:getopt cmd :quote))
         (mood (clingon:getopt cmd :mood))
-        (date (current-date-string)))
+        (date (or (clingon:getopt cmd :date) (current-date-string))))
     (insert-quote-into-db *db* date quote mood)))
 
 (defun cli-insert-command ()
